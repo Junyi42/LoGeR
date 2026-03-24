@@ -43,6 +43,77 @@ For demo usage, please directly refer to:
 
 - [`demo_run.sh`](demo_run.sh)
 
+## Run Reconstruction + Export
+
+[`run_loger.py`](run_loger.py) runs LoGeR* on a folder of images and exports PLY point clouds and an [OpenMVS](https://github.com/cdcseacave/openMVS) `.mvs` scene file.
+
+**Outputs:**
+- `predictions.pt` — raw reconstruction tensors (points, poses, confidence, images)
+- `world_points_full.ply` — full-resolution colored world point cloud (confidence-filtered)
+- `world_points_2x.ply` — 2x subsampled colored world point cloud
+- `camera_poses.ply` — camera positions as colored point cloud (red→blue = temporal order)
+- `scene.mvs` — OpenMVS interface file with camera poses and image list
+
+**Basic usage (auto-estimated intrinsics):**
+
+```bash
+python run_loger.py \
+    --input /path/to/images \
+    --output /path/to/output
+```
+
+**With known intrinsics:**
+
+```bash
+python run_loger.py \
+    --input /path/to/images \
+    --output /path/to/output \
+    --fx 1500 --fy 1500
+```
+
+**Full options:**
+
+```bash
+python run_loger.py \
+    --input /path/to/images \
+    --output /path/to/output \
+    --fx 1500 --fy 1500 \
+    --cx 1200 --cy 800 \
+    --ckpt ckpts/LoGeR_star/latest.pt \
+    --config ckpts/LoGeR_star/original_config.yaml \
+    --window_size 32 \
+    --overlap_size 3 \
+    --start_frame 0 \
+    --end_frame -1 \
+    --stride 1 \
+    --conf_percentile 20
+```
+
+| Argument | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `--input` | Yes | — | Folder of input images (jpg/jpeg/png, case-insensitive) |
+| `--output` | Yes | — | Output folder for all results |
+| `--fx` | No | auto | Focal length X in pixels (original image resolution). Auto-estimated from pointmap if omitted. |
+| `--fy` | No | =fx | Focal length Y in pixels (original image resolution) |
+| `--cx` | No | width/2 | Principal point X in pixels |
+| `--cy` | No | height/2 | Principal point Y in pixels |
+| `--ckpt` | No | `ckpts/LoGeR_star/latest.pt` | Model checkpoint path |
+| `--config` | No | `ckpts/LoGeR_star/original_config.yaml` | Model config YAML |
+| `--window_size` | No | 32 | Sliding window size (frames per chunk) |
+| `--overlap_size` | No | 3 | Overlap between adjacent windows |
+| `--start_frame` | No | 0 | First frame index |
+| `--end_frame` | No | -1 (all) | Last frame index |
+| `--stride` | No | 1 | Frame stride |
+| `--conf_percentile` | No | 20 | Remove points below this confidence percentile |
+| `--per-frame-intrinsics` | No | off | Estimate focal length per frame instead of shared (for zoom/multi-camera) |
+
+**Notes:**
+- If provided, `--fx`/`--fy` must correspond to the **original** image resolution. LoGeR internally resizes images but the MVS export uses original dimensions.
+- If `--fx`/`--fy` are omitted, focal lengths are auto-recovered from the predicted 3D pointmap using the pinhole camera model (confidence-weighted median, similar to DUSt3R's approach). By default all frames are pooled together (shared camera assumption). Use `--per-frame-intrinsics` for varying zoom or multi-camera setups.
+- If the estimated fx and fy are within 2% of each other, they are averaged to enforce square pixels.
+- The `scene.mvs` file stores relative paths to the original images — no image copying is performed.
+- To visualize the raw `.pt` output interactively: `python demo_viser.py --load /path/to/predictions.pt`
+
 ## Evaluation
 
 For evaluation instructions, please refer to:
