@@ -33,12 +33,20 @@ unzip -o data/kitti/data_odometry_poses.zip -d data/kitti  # Ground truth pose
 ```
 
 ### VBR
-To download and extract **VBR** under `data/vbr` (without creating nested `vbr/vbr`), execute:
+
+**Option A: Download pre-processed data from Hugging Face**
 ```bash
 mkdir -p data  # Run from repository root
 wget -c https://huggingface.co/datasets/Junyi42/vbr_processed/resolve/main/vbr_processed.tar.gz -O data/vbr_processed.tar.gz
 tar -xzf data/vbr_processed.tar.gz -C data
 rm -f data/vbr_processed.tar.gz
+```
+
+**Option B: Download raw data and preprocess locally**
+
+Download the raw VBR dataset from the [official VBR devkit](https://github.com/rvp-group/vbr-devkit) and place the sequences under `data/vbr/`. Then run:
+```bash
+python eval/datasets_preprocess/vbr_preprocess.py  # Run from repository root
 ```
 
 ## Long Evaluation Launch
