@@ -34,6 +34,7 @@
 #include <vector>
 #include <limits>
 #include <algorithm>
+#include <tuple>
 #include <Eigen/Dense>
 #include <iomanip>
 
@@ -337,8 +338,10 @@ inline std::pair<Stats, std::vector<ErrorPair>> computeSequenceRPE(const std::ve
   return std::make_pair(Stats(sequence_name, r_rpe, t_rpe), RPE_errors);
 }
 
-inline std::pair<Stats, std::vector<ErrorPair>> computeSequenceATE(const std::vector<Pose> &poses_gt, const std::vector<Pose> &poses_es_aligned, const std::string &sequence_name)
+inline std::tuple<Stats, Stats, std::vector<ErrorPair>> computeSequenceATE(const std::vector<Pose> &poses_gt, const std::vector<Pose> &poses_es_aligned, const std::string &sequence_name)
 {
+  double r_sq_sum = 0;
+  double t_sq_sum = 0;
   double r_sum = 0;
   double t_sum = 0;
   std::vector<ErrorPair> ATE_errors;
@@ -352,13 +355,21 @@ inline std::pair<Stats, std::vector<ErrorPair>> computeSequenceATE(const std::ve
 
     ATE_errors.push_back(ErrorPair(r_err, t_err));
 
+    r_sq_sum += r_err * r_err;
+    t_sq_sum += t_err * t_err;
     r_sum += r_err;
     t_sum += t_err;
   }
 
-  const double r_ate_rmse = std::sqrt(r_sum / double(poses_gt.size()));
-  const double t_ate_rmse = std::sqrt(t_sum / double(poses_gt.size()));
-  return std::make_pair(Stats(sequence_name, r_ate_rmse, t_ate_rmse), ATE_errors);
+  const double n = double(poses_gt.size());
+  const double r_ate_rmse = std::sqrt(r_sq_sum / n);
+  const double t_ate_rmse = std::sqrt(t_sq_sum / n);
+  // legacy metric: sqrt of mean of (unsquared) errors, kept for backward comparison
+  const double r_ate_legacy = std::sqrt(r_sum / n);
+  const double t_ate_legacy = std::sqrt(t_sum / n);
+  return std::make_tuple(Stats(sequence_name, r_ate_rmse, t_ate_rmse),
+                         Stats(sequence_name, r_ate_legacy, t_ate_legacy),
+                         ATE_errors);
 }
 
 inline void computeRank(std::vector<Stats> &stats, const std::string &path_to_result_file, const std::string &path_to_rank_file)
@@ -551,6 +562,7 @@ inline void eval(const std::string &path_to_gt, const std::string &path_to_es, c
 
   std::vector<Stats> rpe_stats;
   std::vector<Stats> ate_stats;
+  std::vector<Stats> ate_legacy_stats;
   for (size_t i = 0; i < seq_names.size(); ++i)
   {
     const std::string sequence_name = seq_names[i];
@@ -605,8 +617,9 @@ inline void eval(const std::string &path_to_gt, const std::string &path_to_es, c
     rpe_stats.push_back(rpe_stat);
 
     const std::vector<Pose> poses_es_aligned = computeAlignedEstimate(poses_gt, poses_es);
-    const auto [ate_stat, ATE_errors] = computeSequenceATE(poses_gt, poses_es_aligned, sequence_name);
+    const auto [ate_stat, ate_legacy_stat, ATE_errors] = computeSequenceATE(poses_gt, poses_es_aligned, sequence_name);
     ate_stats.push_back(ate_stat);
+    ate_legacy_stats.push_back(ate_legacy_stat);
 
     if (plot) {
       constexpr int kPlotSize = 600;  // in pixels; this is the default display size of the SVGs
@@ -641,6 +654,9 @@ inline void eval(const std::string &path_to_gt, const std::string &path_to_es, c
 
   std::cout << eval_type << " stats ATE RMSE (sequence, t_err [m], r_err [deg]):" << std::endl;
   computeRank(ate_stats, path_to_result + "/results_ate.txt", path_to_result + "/rank_ate.txt");
+
+  std::cout << eval_type << " stats ATE legacy (sequence, t_err [sqrt(m)], r_err [sqrt(deg)]):" << std::endl;
+  computeRank(ate_legacy_stats, path_to_result + "/results_ate_legacy.txt", path_to_result + "/rank_ate_legacy.txt");
 }
 
 int main(int argc, char *argv[])
